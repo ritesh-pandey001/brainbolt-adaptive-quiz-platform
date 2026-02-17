@@ -1,0 +1,162 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  username  String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  userState         UserState?
+  answerLogs        AnswerLog[]
+  leaderboardScore  LeaderboardScore?
+  leaderboardStreak LeaderboardStreak?
+  quizSessions      QuizSession[]
+
+  @@index([email])
+  @@index([username])
+  @@map("users")
+}
+
+model Question {
+  id            String   @id @default(uuid())
+  text          String
+  options       String[] // Array of options
+  correctAnswer Int      // Index of correct option
+  difficulty    Int      // 1-10
+  category      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  answerLogs            AnswerLog[]
+  quizSessionQuestions  QuizSessionQuestion[]
+
+  @@index([difficulty])
+  @@index([category])
+  @@map("questions")
+}
+
+model UserState {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  currentDifficulty Int     @default(1) // 1-10
+  streak           Int      @default(0)
+  maxStreak        Int      @default(0)
+  totalScore       Int      @default(0)
+  totalAnswered    Int      @default(0)
+  correctAnswers   Int      @default(0)
+  confidenceBuffer Int[]    @default([]) // Buffer for ping-pong prevention
+  lastActivityAt   DateTime @default(now())
+  stateVersion     Int      @default(0) // For optimistic locking
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([lastActivityAt])
+  @@map("user_states")
+}
+
+model AnswerLog {
+  id                 String   @id @default(uuid())
+  userId             String
+  questionId         String
+  selectedAnswer     Int
+  isCorrect          Boolean
+  difficultyAttempted Int
+  scoreDelta         Int
+  streakAtAnswer     Int
+  idempotencyKey     String   @unique // For idempotent submissions
+  createdAt          DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+  @@index([userId])
+  @@index([questionId])
+  @@index([userId, createdAt])
+  @@index([idempotencyKey])
+  @@map("answer_logs")
+}
+
+model LeaderboardScore {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  score     Int      @default(0)
+  rank      Int?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([score])
+  @@index([rank])
+  @@map("leaderboard_scores")
+}
+
+model LeaderboardStreak {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  streak    Int      @default(0)
+  rank      Int?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([streak])
+  @@index([rank])
+  @@map("leaderboard_streaks")
+}
+
+model QuizSession {
+  id             String    @id @default(uuid())
+  userId         String
+  totalQuestions  Int       @default(30)
+  currentIndex   Int       @default(0)
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questions QuizSessionQuestion[]
+
+  @@index([userId])
+  @@index([userId, completedAt])
+  @@map("quiz_sessions")
+}
+
+model QuizSessionQuestion {
+  id          String    @id @default(uuid())
+  sessionId   String
+  questionId  String
+  orderIndex  Int
+  status      String    @default("pending") // pending | correct | wrong
+  isFlagged   Boolean   @default(false)
+  scoreDelta  Int       @default(0)
+  selectedAnswer Int?
+  answeredAt  DateTime?
+
+  session  QuizSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  question Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, orderIndex])
+  @@unique([sessionId, questionId])
+  @@index([sessionId, orderIndex])
+  @@map("quiz_session_questions")
+}

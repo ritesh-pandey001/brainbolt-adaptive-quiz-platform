@@ -1,0 +1,101 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: brainbolt-postgres
+    restart: unless-stopped
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-brainbolt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brainbolt123}
+      POSTGRES_DB: ${POSTGRES_DB:-brainbolt}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U brainbolt']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: brainbolt-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: brainbolt-backend
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-brainbolt}:${POSTGRES_PASSWORD:-brainbolt123}@postgres:5432/${POSTGRES_DB:-brainbolt}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-60000}
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-300}
+      LEADERBOARD_TOP_N: ${LEADERBOARD_TOP_N:-100}
+      MIN_DIFFICULTY: ${MIN_DIFFICULTY:-1}
+      MAX_DIFFICULTY: ${MAX_DIFFICULTY:-10}
+      CONFIDENCE_BUFFER_SIZE: ${CONFIDENCE_BUFFER_SIZE:-2}
+      INACTIVITY_DECAY_MINUTES: ${INACTIVITY_DECAY_MINUTES:-30}
+      MAX_STREAK_MULTIPLIER: ${MAX_STREAK_MULTIPLIER:-2.0}
+      STREAK_MULTIPLIER_RATE: ${STREAK_MULTIPLIER_RATE:-0.1}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "node dist/index.js"
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:3001/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    container_name: brainbolt-frontend
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:3000']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  default:
+    name: brainbolt-network
