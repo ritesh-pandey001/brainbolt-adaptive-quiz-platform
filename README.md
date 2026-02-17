@@ -132,30 +132,6 @@ The application will be available at:
 
 > All database migrations, seeding, and service orchestration happen automatically.
 
-### Local Development (Without Docker for app services)
-
-```bash
-# 1. Clone and install
-git clone https://github.com/ritesh-pandey001/brainbolt-adaptive-quiz-platform.git
-cd brainbolt-adaptive-quiz-platform
-npm install
-
-# 2. Configure environment
-cp .env.example .env
-
-# 3. Start infrastructure (PostgreSQL + Redis)
-docker compose up -d postgres redis
-
-# 4. Initialize database
-cd apps/backend
-npx prisma generate
-npx prisma db push
-npx prisma db seed
-cd ../..
-
-# 5. Start development servers
-npm run dev
-```
 
 ### Environment Variables
 
@@ -483,3 +459,4 @@ BrainBolt/
 ## License
 
 MIT
+
