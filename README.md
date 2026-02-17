@@ -111,17 +111,37 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed system design and data flows
 - **Docker** & **Docker Compose** (for PostgreSQL + Redis)
 - **npm** ≥ 9
 
-### Quick Start
+### Quick Start (Single Command)
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/ritesh-pandey001/brainbolt-adaptive-quiz-platform.git
+cd brainbolt-adaptive-quiz-platform
+
+# 2. Configure environment (optional — defaults work out of the box)
+cp .env.example .env
+
+# 3. Start everything
+docker compose up --build
+```
+
+The application will be available at:
+- **Frontend:** http://localhost:3000
+- **Backend API:** http://localhost:3001
+- **Health Check:** http://localhost:3001/v1/health
+
+> All database migrations, seeding, and service orchestration happen automatically.
+
+### Local Development (Without Docker for app services)
 
 ```bash
 # 1. Clone and install
-git clone <repository-url>
-cd BrainBolt
+git clone https://github.com/ritesh-pandey001/brainbolt-adaptive-quiz-platform.git
+cd brainbolt-adaptive-quiz-platform
 npm install
 
 # 2. Configure environment
 cp .env.example .env
-# Edit .env if you need to change ports/credentials
 
 # 3. Start infrastructure (PostgreSQL + Redis)
 docker compose up -d postgres redis
@@ -136,11 +156,6 @@ cd ../..
 # 5. Start development servers
 npm run dev
 ```
-
-The application will be available at:
-- **Frontend:** http://localhost:3000
-- **Backend API:** http://localhost:3001
-- **Health Check:** http://localhost:3001/v1/health
 
 ### Environment Variables
 
@@ -159,19 +174,33 @@ See [.env.example](.env.example) for all configurable values:
 
 ## Docker Setup
 
-### Full Stack (All Services)
+### Single-Command Deployment (Assignment Compliant)
 
 ```bash
 docker compose up --build
 ```
 
-This starts 4 services:
-- **postgres** — PostgreSQL 15 with healthcheck
-- **redis** — Redis 7 with healthcheck
-- **backend** — Fastify API (waits for pg + redis)
-- **frontend** — Next.js app (waits for backend)
+**That's it.** This single command starts the entire application stack:
 
-### Infrastructure Only
+| Service | Container | Port | Description |
+|---------|-----------|------|-------------|
+| **PostgreSQL 15** | `brainbolt-postgres` | 5432 | Primary database with healthcheck |
+| **Redis 7** | `brainbolt-redis` | 6379 | Cache + leaderboard with healthcheck |
+| **Backend** | `brainbolt-backend` | 3001 | Fastify API (auto runs migrations + seed) |
+| **Frontend** | `brainbolt-frontend` | 3000 | Next.js production build |
+
+**What happens automatically on `docker compose up --build`:**
+
+1. PostgreSQL and Redis start with health checks
+2. Backend waits for both to be healthy (`depends_on` + entrypoint wait loop)
+3. Backend entrypoint runs `prisma db push` (schema sync) automatically
+4. Backend entrypoint runs `prisma db seed` (120 questions + demo users) automatically
+5. Backend server starts on port 3001
+6. Frontend waits for backend health check, then starts on port 3000
+
+> **No manual `npm install`, `prisma generate`, `prisma db push`, or `prisma db seed` required.**
+
+### Infrastructure Only (Development)
 
 ```bash
 docker compose up -d postgres redis

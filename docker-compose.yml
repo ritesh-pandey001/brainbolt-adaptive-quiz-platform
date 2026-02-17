@@ -1,4 +1,10 @@
+# ──────────────────────────────────────────────────────────────
+# BrainBolt — Single-command Production Stack
+# Usage:  docker-compose up --build
+# ──────────────────────────────────────────────────────────────
+
 services:
+  # ── PostgreSQL 15 ───────────────────────────────────────────
   postgres:
     image: postgres:15-alpine
     container_name: brainbolt-postgres
@@ -13,10 +19,12 @@ services:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U brainbolt']
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
 
+  # ── Redis 7 ─────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: brainbolt-redis
@@ -27,10 +35,12 @@ services:
       - redis-data:/data
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 5s
 
+  # ── Backend (Fastify API) ───────────────────────────────────
   backend:
     build:
       context: .
@@ -43,6 +53,9 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: 3001
       DATABASE_URL: postgresql://${POSTGRES_USER:-brainbolt}:${POSTGRES_PASSWORD:-brainbolt123}@postgres:5432/${POSTGRES_DB:-brainbolt}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-brainbolt}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
@@ -62,14 +75,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: >
-      sh -c "node dist/index.js"
     healthcheck:
       test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:3001/health']
-      interval: 30s
+      interval: 15s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 30s
 
+  # ── Frontend (Next.js) ─────────────────────────────────────
   frontend:
     build:
       context: .
@@ -80,15 +93,16 @@ services:
       - '3000:3000'
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
       test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:3000']
-      interval: 30s
+      interval: 15s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 20s
 
 volumes:
   postgres-data:
